@@ -917,36 +917,44 @@
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
 
-            // If user and file, show file preview inside user message
+            // If user and file, show file info and visual preview inside user message
             if (isUser && fileData) {
+                // Create file info container with smaller font and different typeface
+                const fileInfoDiv = document.createElement('div');
+                fileInfoDiv.style.cssText = 'font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace; font-size: 11px; color: rgba(255, 255, 255, 0.8); margin-bottom: 8px; padding: 4px 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; border-left: 3px solid rgba(255, 255, 255, 0.3);';
+                
                 if (fileData.type.startsWith('image/')) {
+                    fileInfoDiv.innerHTML = `📷 Image: ${fileData.name}`;
+                    
+                    // Add small image preview
                     const img = document.createElement('img');
                     img.src = 'data:' + fileData.type + ';base64,' + fileData.data;
-                    img.style.maxWidth = '120px';
-                    img.style.maxHeight = '80px';
-                    img.style.borderRadius = '8px';
-                    img.style.marginBottom = '8px';
-                    contentDiv.appendChild(img);
+                    img.style.cssText = 'max-width: 100px; max-height: 60px; border-radius: 4px; margin-top: 6px; display: block; cursor: pointer; transition: transform 0.2s;';
+                    img.onclick = () => {
+                        const modal = document.createElement('div');
+                        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:1000;cursor:pointer;';
+                        const largeImg = document.createElement('img');
+                        largeImg.src = img.src;
+                        largeImg.style.cssText = 'max-width:90%;max-height:90%;border-radius:8px;';
+                        modal.appendChild(largeImg);
+                        modal.onclick = () => modal.remove();
+                        document.body.appendChild(modal);
+                    };
+                    img.onmouseover = () => img.style.transform = 'scale(1.05)';
+                    img.onmouseout = () => img.style.transform = 'scale(1)';
+                    fileInfoDiv.appendChild(img);
                 } else if (fileData.type === 'application/pdf') {
-                    const pdfDiv = document.createElement('div');
-                    pdfDiv.style.cssText = 'padding:6px 10px;background:rgba(255,255,255,0.2);border-radius:6px;margin-bottom:12px;font-size:12px;';
-                    pdfDiv.innerHTML = `📄 ${fileData.name}`;
-                    contentDiv.appendChild(pdfDiv);
+                    fileInfoDiv.innerHTML = `📄 PDF Document: ${fileData.name}`;
                 } else if (fileData.type === 'image/svg+xml') {
-                    const svgDiv = document.createElement('div');
-                    svgDiv.style.cssText = 'padding:6px 10px;background:rgba(255,255,255,0.2);border-radius:6px;margin-bottom:12px;font-size:12px;';
-                    svgDiv.innerHTML = `📊 ${fileData.name}`;
-                    contentDiv.appendChild(svgDiv);
+                    fileInfoDiv.innerHTML = `📊 SVG File: ${fileData.name}`;
                 }
+                
+                contentDiv.appendChild(fileInfoDiv);
             }
 
             if (isUser) {
-                // Add extra spacing after file name for user messages
-                let userContent = content;
-                if (fileData && fileData.name) {
-                    userContent = content.replace(fileData.name, fileData.name + '\n\n');
-                }
-                contentDiv.textContent += userContent;
+                // Only show the actual user message content, not the file name
+                contentDiv.innerHTML += `<div style="margin-top: ${fileData ? '8px' : '0'}">${content}</div>`;
             } else {
                 try {
                     // Pre-process content to fix common equation formats
@@ -1377,7 +1385,7 @@
             if (svgStatusDiv) svgStatusDiv.remove();
         }
 
-        // Modified: Updated message sending to include SVG handling
+        // Modified: Updated message sending to not include file name in the message content
         async function sendMessage() {
             if (isLoading || !currentModel) return;
 
@@ -1402,7 +1410,7 @@
                 finalMessage = `${message}\n\n[PDF Content from "${uploadedFileName}"]\n${pdfTextContent}`;
             }
 
-            // Add user message, with file if present (display original message, not with PDF text)
+            // Add user message with separated file display
             addMessage(message, true, fileData);
 
             // Add user message to memory (use finalMessage with PDF text for LLM)
