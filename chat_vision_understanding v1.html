@@ -598,6 +598,15 @@
                 </div>
                 <button class="btn" onclick="activateModel()" id="activateBtn" disabled title="Activate the selected model">🚀 Activate</button>
             </div>
+            <div class="config-row">
+                <div class="config-group" style="flex: 1;">
+                    <label for="systemPrompt" style="align-self: flex-start; margin-top: 8px;">System Prompt:</label>
+                    <textarea id="systemPrompt" 
+                        placeholder="Enter system prompt to guide AI behavior..." 
+                        style="flex: 1; min-height: 80px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; resize: vertical; font-family: inherit;"
+                        title="System prompt that will be used for every conversation">You are a helpful AI assistant. You can analyze images, PDFs, and other files that users upload. Provide detailed, accurate, and helpful responses based on the content you see or read.</textarea>
+                </div>
+            </div>
         </div>
 
         <div class="chat-container">
@@ -666,6 +675,7 @@
                 content: "👋 Hello! I'm your AI assistant run locally in your PC. Please configure your settings above and select a model to start chatting. Then you can add image, pdf, or other file and ask about the uploaded file."
             }
         ];
+        let currentSystemPrompt = null; // Track current system prompt
 
         // New: Start new chat (clear history and UI)
         function startNewChat() {
@@ -675,6 +685,7 @@
                     content: "👋 Hello! I'm your AI assistant run locally in your PC. Please configure your settings above and select a model to start chatting. Then you can add image, pdf, or other file and ask about the uploaded file."
                 }
             ];
+            currentSystemPrompt = null; // Reset system prompt tracking
             const messagesContainer = document.getElementById('messages');
             messagesContainer.innerHTML = '';
             addMessage(conversationHistory[0].content, false);
@@ -1385,7 +1396,7 @@
             if (svgStatusDiv) svgStatusDiv.remove();
         }
 
-        // Modified: Updated message sending to not include file name in the message content
+        // Modified: Updated message sending to include system prompt
         async function sendMessage() {
             if (isLoading || !currentModel) return;
 
@@ -1393,6 +1404,33 @@
             const message = messageInput.value.trim();
             
             if (!message && !uploadedFileBase64 && !pdfImageContents.length && !svgConvertedBase64) return;
+
+            // Get system prompt and check if it changed
+            const systemPrompt = document.getElementById('systemPrompt').value.trim();
+            const systemPromptChanged = currentSystemPrompt !== systemPrompt;
+            
+            // If system prompt changed, we need to restart the conversation context
+            if (systemPromptChanged && systemPrompt) {
+                currentSystemPrompt = systemPrompt;
+                // Add system message to history if it's the first time or changed
+                if (conversationHistory.length === 1 && conversationHistory[0].role === "assistant") {
+                    // Insert system prompt before the initial assistant message
+                    conversationHistory.unshift({
+                        role: "system",
+                        content: systemPrompt
+                    });
+                } else {
+                    // For existing conversations, we'll include it in the request but not permanently store it
+                    // to avoid duplicating system messages
+                }
+            } else if (systemPromptChanged && !systemPrompt) {
+                // System prompt was cleared
+                currentSystemPrompt = null;
+                // Remove system message from history if it exists
+                if (conversationHistory.length > 0 && conversationHistory[0].role === "system") {
+                    conversationHistory.shift();
+                }
+            }
 
             // Prepare file data for display
             let fileData = null;
@@ -1457,18 +1495,30 @@
             showLoading();
             document.getElementById('sendBtn').disabled = true;
             messageInput.disabled = true;
+            
+            // Prepare messages array for API request
+            let messages = [];
+            
+            // Always include current system prompt if present
+            if (systemPrompt) {
+                messages.push({ role: "system", content: systemPrompt });
+            }
+            
+            // Add conversation history (excluding system messages from history to avoid duplication)
+            const historyMessages = conversationHistory.filter(msg => msg.role !== "system");
+            messages = messages.concat(historyMessages.map(msg => {
+                // Include images for user messages (both regular images and PDF pages)
+                if (msg.role === "user" && msg.images) {
+                    return { role: msg.role, content: msg.content, images: msg.images };
+                } else {
+                    return { role: msg.role, content: msg.content };
+                }
+            }));
 
             // Prepare request body
             const body = {
                 model: currentModel,
-                messages: conversationHistory.map(msg => {
-                    // Include images for user messages (both regular images and PDF pages)
-                    if (msg.role === "user" && msg.images) {
-                        return { role: msg.role, content: msg.content, images: msg.images };
-                    } else {
-                        return { role: msg.role, content: msg.content };
-                    }
-                }),
+                messages: messages,
                 stream: false
             };
 
