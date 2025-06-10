@@ -12,6 +12,8 @@
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <!-- Add PDF.js for PDF processing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Add SheetJS for Excel/CSV processing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
         // Configure PDF.js worker
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -528,6 +530,64 @@
             border-radius: 4px;
             border: 1px solid #dee2e6;
         }
+
+        /* Add CSV/Excel processing styles */
+        .csv-processing {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .spreadsheet-preview {
+            max-height: 200px;
+            overflow: auto;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 8px;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+        
+        .spreadsheet-preview table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        
+        .spreadsheet-preview th,
+        .spreadsheet-preview td {
+            border: 1px solid #ddd;
+            padding: 4px 6px;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100px;
+        }
+        
+        .spreadsheet-preview th {
+            background: #e9ecef;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        
+        .spreadsheet-stats {
+            font-size: 10px;
+            color: #666;
+            margin-top: 4px;
+            padding: 4px 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+        }
     </style>
     <script>
         // Configure MathJax - Updated configuration
@@ -620,9 +680,9 @@
             
             <div class="input-container">
                 <div class="input-row">
-                    <!-- Modified: Accept images, PDFs, and SVG files -->
-                    <input type="file" id="imageInput" accept="image/*,application/pdf,.pdf,.svg,image/svg+xml" style="display:none" onchange="handleFileUpload(event)" title="Select an image, PDF, or SVG file" aria-label="File upload">
-                    <button class="btn" id="imageBtn" title="Attach file (image/PDF/SVG)" onclick="document.getElementById('imageInput').click()" style="padding:0 12px;font-size:20px;line-height:1.2;" aria-label="Attach file">📎</button>
+                    <!-- Modified: Accept images, PDFs, SVG, CSV, and Excel files -->
+                    <input type="file" id="imageInput" accept="image/*,application/pdf,.pdf,.svg,image/svg+xml,.csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx,.xls" style="display:none" onchange="handleFileUpload(event)" title="Select a file (image/PDF/SVG/CSV/Excel)" aria-label="File upload">
+                    <button class="btn" id="imageBtn" title="Attach file (image/PDF/SVG/CSV/Excel)" onclick="document.getElementById('imageInput').click()" style="padding:0 12px;font-size:20px;line-height:1.2;" aria-label="Attach file">📎</button>
                     <label for="messageInput" class="sr-only">Message input</label>
                     <textarea 
                         class="input-field" 
@@ -638,7 +698,7 @@
                         ➤
                     </button>
                 </div>
-                <!-- Modified: File preview container with SVG support -->
+                <!-- Modified: File preview container with CSV/Excel support -->
                 <div id="imagePreviewContainer" style="margin-top:8px;display:none;">
                     <div id="filePreview" style="display:flex;align-items:center;gap:8px;">
                         <img id="imagePreview" src="" alt="Image preview" style="max-width:120px;max-height:80px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:none;">
@@ -647,6 +707,12 @@
                         </div>
                         <div id="svgPreview" style="display:none;padding:8px 12px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;font-size:12px;color:#666;">
                             📊 <span id="svgFileName"></span>
+                        </div>
+                        <div id="csvPreview" style="display:none;padding:8px 12px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;font-size:12px;color:#666;">
+                            📊 <span id="csvFileName"></span>
+                        </div>
+                        <div id="xlsxPreview" style="display:none;padding:8px 12px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;font-size:12px;color:#666;">
+                            📈 <span id="xlsxFileName"></span>
                         </div>
                         <button class="btn" style="padding:2px 10px;font-size:12px;" onclick="removeFile()" title="Remove attached file" aria-label="Remove file">✖</button>
                     </div>
@@ -660,13 +726,15 @@
         let isLoading = false;
         let baseUrl = 'http://127.0.0.1:11434';
 
-        // Modified: Store PDF/SVG content
+        // Modified: Store PDF/SVG/CSV/Excel content
         let uploadedFileBase64 = null;
         let uploadedFileType = null;
         let uploadedFileName = null;
         let pdfTextContent = null;
         let pdfImageContents = [];
         let svgConvertedBase64 = null; // Store converted SVG as PNG
+        let spreadsheetData = null; // Store CSV/Excel data
+        let spreadsheetStats = null; // Store statistics about spreadsheet
 
         // New: Conversation memory/history
         let conversationHistory = [
@@ -850,7 +918,7 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
 
-            // For assistant messages, show PDF thumbnails if the previous user message had a PDF
+            // For assistant messages, show file thumbnails/previews if the previous user message had a file
             if (!isUser && conversationHistory.length >= 1) {
                 const lastUserMsgIndex = conversationHistory.length - 1;
                 if (lastUserMsgIndex >= 0) {
@@ -920,6 +988,13 @@
                             }
                             
                             messageDiv.appendChild(pdfThumbnailsDiv);
+                        } else if ((file.type === 'text/csv' || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') && file.spreadsheetPreview) {
+                            // Show spreadsheet preview for assistant responses
+                            const spreadsheetDiv = document.createElement('div');
+                            spreadsheetDiv.className = 'spreadsheet-preview';
+                            spreadsheetDiv.style.marginBottom = '12px';
+                            spreadsheetDiv.innerHTML = file.spreadsheetPreview;
+                            messageDiv.appendChild(spreadsheetDiv);
                         }
                     }
                 }
@@ -930,7 +1005,6 @@
 
             // If user and file, show file info and visual preview inside user message
             if (isUser && fileData) {
-                // Create file info container with smaller font and different typeface
                 const fileInfoDiv = document.createElement('div');
                 fileInfoDiv.style.cssText = 'font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace; font-size: 11px; color: rgba(255, 255, 255, 0.8); margin-bottom: 8px; padding: 4px 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; border-left: 3px solid rgba(255, 255, 255, 0.3);';
                 
@@ -958,6 +1032,16 @@
                     fileInfoDiv.innerHTML = `📄 PDF Document: ${fileData.name}`;
                 } else if (fileData.type === 'image/svg+xml') {
                     fileInfoDiv.innerHTML = `📊 SVG File: ${fileData.name}`;
+                } else if (fileData.type === 'text/csv') {
+                    fileInfoDiv.innerHTML = `📊 CSV File: ${fileData.name}`;
+                    if (fileData.stats) {
+                        fileInfoDiv.innerHTML += `<br><small>${fileData.stats.rows} rows × ${fileData.stats.columns} columns</small>`;
+                    }
+                } else if (fileData.type.includes('spreadsheet') || fileData.type.includes('excel')) {
+                    fileInfoDiv.innerHTML = `📈 Excel File: ${fileData.name}`;
+                    if (fileData.stats) {
+                        fileInfoDiv.innerHTML += `<br><small>${fileData.stats.sheets} sheet(s), ${fileData.stats.rows} rows × ${fileData.stats.columns} columns</small>`;
+                    }
                 }
                 
                 contentDiv.appendChild(fileInfoDiv);
@@ -1312,7 +1396,181 @@
             }
         }
 
-        // Modified: Handle image, PDF, and SVG uploads
+        // New: CSV processing functions
+        async function processCSV(file) {
+            try {
+                showCSVProcessingStatus('Processing CSV file...');
+                
+                const text = await file.text();
+                const workbook = XLSX.read(text, { type: 'string' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                
+                // Calculate statistics
+                const stats = {
+                    rows: jsonData.length,
+                    columns: jsonData.length > 0 ? Math.max(...jsonData.map(row => row.length)) : 0,
+                    nonEmptyRows: jsonData.filter(row => row.some(cell => cell !== null && cell !== undefined && cell !== '')).length
+                };
+                
+                spreadsheetData = jsonData;
+                spreadsheetStats = stats;
+                
+                showCSVProcessingStatus('CSV processing complete!', true);
+                updateSpreadsheetPreview();
+                
+                return { data: jsonData, stats: stats };
+                
+            } catch (error) {
+                console.error('Error processing CSV:', error);
+                showCSVProcessingStatus('Error processing CSV: ' + error.message, false, true);
+                throw error;
+            }
+        }
+
+        // New: Excel processing functions
+        async function processExcel(file) {
+            try {
+                showCSVProcessingStatus('Processing Excel file...');
+                
+                const arrayBuffer = await file.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                
+                // Process all sheets
+                const allSheetsData = {};
+                let totalRows = 0;
+                let maxColumns = 0;
+                
+                workbook.SheetNames.forEach(sheetName => {
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    allSheetsData[sheetName] = jsonData;
+                    totalRows += jsonData.length;
+                    if (jsonData.length > 0) {
+                        maxColumns = Math.max(maxColumns, Math.max(...jsonData.map(row => row.length)));
+                    }
+                });
+                
+                // Use first sheet as primary data
+                const firstSheetName = workbook.SheetNames[0];
+                const primaryData = allSheetsData[firstSheetName] || [];
+                
+                const stats = {
+                    sheets: workbook.SheetNames.length,
+                    rows: primaryData.length,
+                    columns: maxColumns,
+                    totalRows: totalRows,
+                    nonEmptyRows: primaryData.filter(row => row.some(cell => cell !== null && cell !== undefined && cell !== '')).length,
+                    sheetNames: workbook.SheetNames
+                };
+                
+                spreadsheetData = primaryData;
+                spreadsheetStats = stats;
+                
+                showCSVProcessingStatus('Excel processing complete!', true);
+                updateSpreadsheetPreview();
+                
+                return { data: allSheetsData, primaryData: primaryData, stats: stats };
+                
+            } catch (error) {
+                console.error('Error processing Excel:', error);
+                showCSVProcessingStatus('Error processing Excel: ' + error.message, false, true);
+                throw error;
+            }
+        }
+        
+        function showCSVProcessingStatus(message, complete = false, error = false) {
+            let statusDiv = document.getElementById('csvProcessingStatus');
+            if (!statusDiv) {
+                statusDiv = document.createElement('div');
+                statusDiv.id = 'csvProcessingStatus';
+                statusDiv.className = 'csv-processing';
+                document.getElementById('imagePreviewContainer').appendChild(statusDiv);
+            }
+            
+            if (error) {
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.borderColor = '#f5c6cb';
+                statusDiv.style.color = '#721c24';
+                statusDiv.innerHTML = `❌ ${message}`;
+            } else if (complete) {
+                statusDiv.style.background = '#d4edda';
+                statusDiv.style.borderColor = '#c3e6cb';
+                statusDiv.style.color = '#155724';
+                statusDiv.innerHTML = `✅ ${message}`;
+                setTimeout(() => {
+                    if (statusDiv.parentNode) {
+                        statusDiv.remove();
+                    }
+                }, 3000);
+            } else {
+                statusDiv.innerHTML = `<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> ${message}`;
+            }
+        }
+        
+        function updateSpreadsheetPreview() {
+            const container = document.getElementById('filePreview');
+            
+            // Remove existing preview content
+            const existingPreview = container.querySelector('.spreadsheet-preview');
+            if (existingPreview) existingPreview.remove();
+            
+            if (spreadsheetData && spreadsheetData.length > 0) {
+                const previewDiv = document.createElement('div');
+                previewDiv.className = 'spreadsheet-preview';
+                
+                // Create table
+                const table = document.createElement('table');
+                
+                // Add headers (first row or A, B, C... if no headers)
+                const headerRow = document.createElement('tr');
+                const firstDataRow = spreadsheetData[0] || [];
+                const maxCols = Math.min(10, Math.max(5, firstDataRow.length)); // Show max 10 columns
+                
+                for (let i = 0; i < maxCols; i++) {
+                    const th = document.createElement('th');
+                    th.textContent = firstDataRow[i] || String.fromCharCode(65 + i); // A, B, C... if empty
+                    headerRow.appendChild(th);
+                }
+                table.appendChild(headerRow);
+                
+                // Add data rows (skip first row if it looks like headers, otherwise include it)
+                const hasHeaders = firstDataRow.every(cell => typeof cell === 'string' && cell.length > 0);
+                const startRow = hasHeaders ? 1 : 0;
+                const maxRows = Math.min(8, spreadsheetData.length - startRow); // Show max 8 data rows
+                
+                for (let i = startRow; i < startRow + maxRows && i < spreadsheetData.length; i++) {
+                    const row = spreadsheetData[i];
+                    const tr = document.createElement('tr');
+                    
+                    for (let j = 0; j < maxCols; j++) {
+                        const td = document.createElement('td');
+                        const cellValue = row[j];
+                        td.textContent = cellValue !== null && cellValue !== undefined ? String(cellValue) : '';
+                        td.title = td.textContent; // Tooltip for truncated content
+                        tr.appendChild(td);
+                    }
+                    table.appendChild(tr);
+                }
+                
+                previewDiv.appendChild(table);
+                
+                // Add statistics
+                const statsDiv = document.createElement('div');
+                statsDiv.className = 'spreadsheet-stats';
+                let statsText = `${spreadsheetStats.rows} rows × ${spreadsheetStats.columns} columns`;
+                if (spreadsheetStats.sheets > 1) {
+                    statsText += ` • ${spreadsheetStats.sheets} sheets: ${spreadsheetStats.sheetNames.join(', ')}`;
+                }
+                statsDiv.textContent = statsText;
+                previewDiv.appendChild(statsDiv);
+                
+                container.appendChild(previewDiv);
+            }
+        }
+
+        // Modified: Handle image, PDF, SVG, CSV, and Excel uploads
         async function handleFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -1320,17 +1578,20 @@
             uploadedFileName = file.name;
             uploadedFileType = file.type;
             
+            // Reset all preview states
+            document.getElementById('imagePreview').style.display = 'none';
+            document.getElementById('pdfPreview').style.display = 'none';
+            document.getElementById('svgPreview').style.display = 'none';
+            document.getElementById('csvPreview').style.display = 'none';
+            document.getElementById('xlsxPreview').style.display = 'none';
+            
             if (file.type === 'application/pdf') {
                 document.getElementById('pdfFileName').textContent = file.name;
                 document.getElementById('pdfPreview').style.display = 'block';
-                document.getElementById('imagePreview').style.display = 'none';
-                document.getElementById('svgPreview').style.display = 'none';
                 document.getElementById('imagePreviewContainer').style.display = 'flex';
                 
-                // Process PDF
                 try {
                     await processPDF(file);
-                    // Store original file as base64 for reference
                     const reader = new FileReader();
                     reader.onload = function(e) {
                         uploadedFileBase64 = e.target.result.split(',')[1];
@@ -1343,14 +1604,10 @@
                 uploadedFileType = 'image/svg+xml';
                 document.getElementById('svgFileName').textContent = file.name;
                 document.getElementById('svgPreview').style.display = 'block';
-                document.getElementById('imagePreview').style.display = 'none';
-                document.getElementById('pdfPreview').style.display = 'none';
                 document.getElementById('imagePreviewContainer').style.display = 'flex';
                 
-                // Process SVG
                 try {
                     await processSVG(file);
-                    // Store original SVG as base64 for reference
                     const reader = new FileReader();
                     reader.onload = function(e) {
                         uploadedFileBase64 = e.target.result.split(',')[1];
@@ -1359,14 +1616,47 @@
                 } catch (error) {
                     console.error('SVG processing failed:', error);
                 }
+            } else if (file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')) {
+                uploadedFileType = 'text/csv';
+                document.getElementById('csvFileName').textContent = file.name;
+                document.getElementById('csvPreview').style.display = 'block';
+                document.getElementById('imagePreviewContainer').style.display = 'flex';
+                
+                try {
+                    await processCSV(file);
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        uploadedFileBase64 = e.target.result.split(',')[1];
+                    };
+                    reader.readAsDataURL(file);
+                } catch (error) {
+                    console.error('CSV processing failed:', error);
+                }
+            } else if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
+                       file.type === 'application/vnd.ms-excel' || 
+                       file.name.toLowerCase().endsWith('.xlsx') || 
+                       file.name.toLowerCase().endsWith('.xls')) {
+                uploadedFileType = file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                document.getElementById('xlsxFileName').textContent = file.name;
+                document.getElementById('xlsxPreview').style.display = 'block';
+                document.getElementById('imagePreviewContainer').style.display = 'flex';
+                
+                try {
+                    await processExcel(file);
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        uploadedFileBase64 = e.target.result.split(',')[1];
+                    };
+                    reader.readAsDataURL(file);
+                } catch (error) {
+                    console.error('Excel processing failed:', error);
+                }
             } else if (file.type.startsWith('image/')) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     uploadedFileBase64 = e.target.result.split(',')[1];
                     document.getElementById('imagePreview').src = e.target.result;
                     document.getElementById('imagePreview').style.display = 'block';
-                    document.getElementById('pdfPreview').style.display = 'none';
-                    document.getElementById('svgPreview').style.display = 'none';
                     document.getElementById('imagePreviewContainer').style.display = 'flex';
                 };
                 reader.readAsDataURL(file);
@@ -1381,12 +1671,16 @@
             pdfTextContent = null;
             pdfImageContents = [];
             svgConvertedBase64 = null;
+            spreadsheetData = null;
+            spreadsheetStats = null;
             
             document.getElementById('imageInput').value = '';
             document.getElementById('imagePreview').src = '';
             document.getElementById('imagePreview').style.display = 'none';
             document.getElementById('pdfPreview').style.display = 'none';
             document.getElementById('svgPreview').style.display = 'none';
+            document.getElementById('csvPreview').style.display = 'none';
+            document.getElementById('xlsxPreview').style.display = 'none';
             document.getElementById('imagePreviewContainer').style.display = 'none';
             
             // Remove processing status divs
@@ -1394,6 +1688,8 @@
             if (pdfStatusDiv) pdfStatusDiv.remove();
             const svgStatusDiv = document.getElementById('svgProcessingStatus');
             if (svgStatusDiv) svgStatusDiv.remove();
+            const csvStatusDiv = document.getElementById('csvProcessingStatus');
+            if (csvStatusDiv) csvStatusDiv.remove();
         }
 
         // Modified: Updated message sending to include system prompt
@@ -1403,7 +1699,7 @@
             const messageInput = document.getElementById('messageInput');
             const message = messageInput.value.trim();
             
-            if (!message && !uploadedFileBase64 && !pdfImageContents.length && !svgConvertedBase64) return;
+            if (!message && !uploadedFileBase64 && !pdfImageContents.length && !svgConvertedBase64 && !spreadsheetData) return;
 
             // Get system prompt and check if it changed
             const systemPrompt = document.getElementById('systemPrompt').value.trim();
@@ -1440,21 +1736,30 @@
                     type: uploadedFileType,
                     name: uploadedFileName
                 };
+                
+                // Add spreadsheet stats if available
+                if (spreadsheetStats) {
+                    fileData.stats = spreadsheetStats;
+                }
             }
 
-            // For PDFs, append extracted text content to the message for LLM processing
+            // For PDFs and spreadsheets, append extracted content to the message for LLM processing
             let finalMessage = message;
             if (pdfTextContent) {
                 finalMessage = `${message}\n\n[PDF Content from "${uploadedFileName}"]\n${pdfTextContent}`;
+            } else if (spreadsheetData) {
+                // Convert spreadsheet data to text format for AI analysis
+                const csvText = convertSpreadsheetToText(spreadsheetData, spreadsheetStats);
+                finalMessage = `${message}\n\n[Spreadsheet Data from "${uploadedFileName}"]\n${csvText}`;
             }
 
             // Add user message with separated file display
             addMessage(message, true, fileData);
 
-            // Add user message to memory (use finalMessage with PDF text for LLM)
+            // Add user message to memory
             let userMsg = { role: "user", content: finalMessage };
             
-            // Handle different file types for vision input
+            // Handle different file types for vision input and data processing
             if (pdfImageContents.length > 0) {
                 // PDF handling
                 userMsg.images = pdfImageContents.map(img => img.data);
@@ -1480,6 +1785,16 @@
                     data: uploadedFileBase64,
                     type: uploadedFileType,
                     name: uploadedFileName
+                }];
+            } else if (spreadsheetData) {
+                // For spreadsheets, store the data and preview for reference
+                userMsg.files = [{
+                    data: uploadedFileBase64,
+                    type: uploadedFileType,
+                    name: uploadedFileName,
+                    spreadsheetData: spreadsheetData,
+                    spreadsheetStats: spreadsheetStats,
+                    spreadsheetPreview: generateSpreadsheetPreviewHTML()
                 }];
             }
             
@@ -1567,11 +1882,78 @@
             }
         }
 
-        function handleKeyDown(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
+        // Helper function to convert spreadsheet data to text
+        function convertSpreadsheetToText(data, stats) {
+            if (!data || data.length === 0) return "Empty spreadsheet";
+            
+            let text = `Spreadsheet Summary: ${stats.rows} rows × ${stats.columns} columns`;
+            if (stats.sheets > 1) {
+                text += ` (${stats.sheets} sheets: ${stats.sheetNames.join(', ')})`;
             }
+            text += '\n\n';
+            
+            // Add header row
+            const maxRows = Math.min(20, data.length); // Limit to 20 rows
+            const maxCols = Math.min(10, stats.columns); // Limit to 10 columns
+            
+            for (let i = 0; i < maxRows; i++) {
+                const row = data[i] || [];
+                const rowData = [];
+                for (let j = 0; j < maxCols; j++) {
+                    const cell = row[j];
+                    rowData.push(cell !== null && cell !== undefined ? String(cell) : '');
+                }
+                text += rowData.join('\t') + '\n';
+            }
+            
+            if (data.length > maxRows) {
+                text += `\n... (${data.length - maxRows} more rows hidden)\n`;
+            }
+            
+            return text;
+        }
+
+        // Helper function to generate HTML preview for spreadsheet
+        function generateSpreadsheetPreviewHTML() {
+            if (!spreadsheetData || spreadsheetData.length === 0) return '';
+            
+            const container = document.createElement('div');
+            container.className = 'spreadsheet-preview';
+            
+            // Create table (similar to updateSpreadsheetPreview but return HTML)
+            const table = document.createElement('table');
+            const firstDataRow = spreadsheetData[0] || [];
+            const maxCols = Math.min(6, Math.max(3, firstDataRow.length));
+            
+            // Headers
+            const headerRow = document.createElement('tr');
+            for (let i = 0; i < maxCols; i++) {
+                const th = document.createElement('th');
+                th.textContent = firstDataRow[i] || String.fromCharCode(65 + i);
+                headerRow.appendChild(th);
+            }
+            table.appendChild(headerRow);
+            
+            // Data rows
+            const hasHeaders = firstDataRow.every(cell => typeof cell === 'string' && cell.length > 0);
+            const startRow = hasHeaders ? 1 : 0;
+            const maxRows = Math.min(4, spreadsheetData.length - startRow);
+            
+            for (let i = startRow; i < startRow + maxRows && i < spreadsheetData.length; i++) {
+                const row = spreadsheetData[i];
+                const tr = document.createElement('tr');
+                
+                for (let j = 0; j < maxCols; j++) {
+                    const td = document.createElement('td');
+                    const cellValue = row[j];
+                    td.textContent = cellValue !== null && cellValue !== undefined ? String(cellValue) : '';
+                    tr.appendChild(td);
+                }
+                table.appendChild(tr);
+            }
+            
+            container.appendChild(table);
+            return container.outerHTML;
         }
 
         // Auto-resize textarea
@@ -1587,6 +1969,13 @@
         window.addEventListener('load', () => {
             setTimeout(detectModels, 1000);
         });
+
+        function handleKeyDown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
     </script>
 </body>
 </html>
