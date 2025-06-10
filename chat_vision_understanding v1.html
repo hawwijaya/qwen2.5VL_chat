@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Chat</title>
+    <title>AI Chat - by Kuatrinnus Wijaya (Jun 2025)</title>
     <!-- External libraries for enhanced rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -570,7 +570,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="title">AI Chat</div>
+            <div class="title">AI Chat - by Kuatrinnus Wijaya (Jun 2025)</div>
             <div class="header-buttons">
                 <button class="new-chat-btn" onclick="startNewChat()" id="newChatBtn" title="Start a new conversation">🆕 New Chat</button>
                 <button class="config-btn" onclick="toggleConfig()">⚙️ Settings</button>
@@ -850,6 +850,26 @@
                             img.style.borderRadius = '8px';
                             img.style.marginBottom = '12px';
                             img.style.display = 'block';
+                            img.style.cursor = 'pointer';
+                            img.style.transition = 'transform 0.2s';
+                            img.title = 'Click to view full size';
+                            
+                            // Add click handler for image popup
+                            img.onclick = () => {
+                                const modal = document.createElement('div');
+                                modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:1000;cursor:pointer;';
+                                const largeImg = document.createElement('img');
+                                largeImg.src = img.src;
+                                largeImg.style.cssText = 'max-width:90%;max-height:90%;border-radius:8px;';
+                                modal.appendChild(largeImg);
+                                modal.onclick = () => modal.remove();
+                                document.body.appendChild(modal);
+                            };
+                            
+                            // Add hover effect
+                            img.onmouseover = () => img.style.transform = 'scale(1.05)';
+                            img.onmouseout = () => img.style.transform = 'scale(1)';
+                            
                             messageDiv.appendChild(img);
                         } else if (file.type === 'application/pdf' && file.pageImages) {
                             // Show PDF page thumbnails for assistant responses
