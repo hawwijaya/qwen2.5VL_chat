@@ -611,9 +611,9 @@
             
             <div class="input-container">
                 <div class="input-row">
-                    <!-- Modified: Accept both images and PDFs -->
-                    <input type="file" id="imageInput" accept="image/*,application/pdf,.pdf" style="display:none" onchange="handleFileUpload(event)" title="Select an image or PDF file" aria-label="File upload">
-                    <button class="btn" id="imageBtn" title="Attach file (image/PDF)" onclick="document.getElementById('imageInput').click()" style="padding:0 12px;font-size:20px;line-height:1.2;" aria-label="Attach file">📎</button>
+                    <!-- Modified: Accept images, PDFs, and SVG files -->
+                    <input type="file" id="imageInput" accept="image/*,application/pdf,.pdf,.svg,image/svg+xml" style="display:none" onchange="handleFileUpload(event)" title="Select an image, PDF, or SVG file" aria-label="File upload">
+                    <button class="btn" id="imageBtn" title="Attach file (image/PDF/SVG)" onclick="document.getElementById('imageInput').click()" style="padding:0 12px;font-size:20px;line-height:1.2;" aria-label="Attach file">📎</button>
                     <label for="messageInput" class="sr-only">Message input</label>
                     <textarea 
                         class="input-field" 
@@ -629,12 +629,15 @@
                         ➤
                     </button>
                 </div>
-                <!-- Modified: File preview container -->
+                <!-- Modified: File preview container with SVG support -->
                 <div id="imagePreviewContainer" style="margin-top:8px;display:none;">
                     <div id="filePreview" style="display:flex;align-items:center;gap:8px;">
                         <img id="imagePreview" src="" alt="Image preview" style="max-width:120px;max-height:80px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:none;">
                         <div id="pdfPreview" style="display:none;padding:8px 12px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;font-size:12px;color:#666;">
                             📄 <span id="pdfFileName"></span>
+                        </div>
+                        <div id="svgPreview" style="display:none;padding:8px 12px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;font-size:12px;color:#666;">
+                            📊 <span id="svgFileName"></span>
                         </div>
                         <button class="btn" style="padding:2px 10px;font-size:12px;" onclick="removeFile()" title="Remove attached file" aria-label="Remove file">✖</button>
                     </div>
@@ -648,12 +651,13 @@
         let isLoading = false;
         let baseUrl = 'http://127.0.0.1:11434';
 
-        // Modified: Store PDF content (text and images)
+        // Modified: Store PDF/SVG content
         let uploadedFileBase64 = null;
         let uploadedFileType = null;
         let uploadedFileName = null;
         let pdfTextContent = null;
         let pdfImageContents = [];
+        let svgConvertedBase64 = null; // Store converted SVG as PNG
 
         // New: Conversation memory/history
         let conversationHistory = [
@@ -928,6 +932,11 @@
                     pdfDiv.style.cssText = 'padding:6px 10px;background:rgba(255,255,255,0.2);border-radius:6px;margin-bottom:12px;font-size:12px;';
                     pdfDiv.innerHTML = `📄 ${fileData.name}`;
                     contentDiv.appendChild(pdfDiv);
+                } else if (fileData.type === 'image/svg+xml') {
+                    const svgDiv = document.createElement('div');
+                    svgDiv.style.cssText = 'padding:6px 10px;background:rgba(255,255,255,0.2);border-radius:6px;margin-bottom:12px;font-size:12px;';
+                    svgDiv.innerHTML = `📊 ${fileData.name}`;
+                    contentDiv.appendChild(svgDiv);
                 }
             }
 
@@ -1185,7 +1194,106 @@
             }
         }
 
-        // Modified: Handle both image and PDF uploads with PDF processing
+        // New: SVG processing functions
+        async function processSVG(file) {
+            try {
+                const svgText = await file.text();
+                
+                // Show processing status
+                showSVGProcessingStatus('Converting SVG to image...');
+                
+                return new Promise((resolve, reject) => {
+                    const img = new Image();
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    img.onload = function() {
+                        // Set canvas size to image dimensions
+                        canvas.width = img.width || 800;
+                        canvas.height = img.height || 600;
+                        
+                        // Draw the SVG image onto canvas
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0);
+                        
+                        // Convert to base64 PNG
+                        const dataUrl = canvas.toDataURL('image/png');
+                        svgConvertedBase64 = dataUrl.split(',')[1];
+                        
+                        showSVGProcessingStatus('SVG conversion complete!', true);
+                        resolve({ convertedBase64: svgConvertedBase64 });
+                    };
+                    
+                    img.onerror = function(error) {
+                        console.error('SVG conversion error:', error);
+                        showSVGProcessingStatus('Error converting SVG', false, true);
+                        reject(error);
+                    };
+                    
+                    // Create blob URL for the SVG
+                    const blob = new Blob([svgText], { type: 'image/svg+xml' });
+                    const url = URL.createObjectURL(blob);
+                    img.src = url;
+                    
+                    // Clean up the blob URL after loading
+                    img.onload = function() {
+                        URL.revokeObjectURL(url);
+                        // Set canvas size to image dimensions
+                        canvas.width = img.width || 800;
+                        canvas.height = img.height || 600;
+                        
+                        // Draw the SVG image onto canvas
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0);
+                        
+                        // Convert to base64 PNG
+                        const dataUrl = canvas.toDataURL('image/png');
+                        svgConvertedBase64 = dataUrl.split(',')[1];
+                        
+                        showSVGProcessingStatus('SVG conversion complete!', true);
+                        resolve({ convertedBase64: svgConvertedBase64 });
+                    };
+                });
+                
+            } catch (error) {
+                console.error('Error processing SVG:', error);
+                showSVGProcessingStatus('Error processing SVG: ' + error.message, false, true);
+                throw error;
+            }
+        }
+        
+        function showSVGProcessingStatus(message, complete = false, error = false) {
+            let statusDiv = document.getElementById('svgProcessingStatus');
+            if (!statusDiv) {
+                statusDiv = document.createElement('div');
+                statusDiv.id = 'svgProcessingStatus';
+                statusDiv.className = 'pdf-processing';
+                document.getElementById('imagePreviewContainer').appendChild(statusDiv);
+            }
+            
+            if (error) {
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.borderColor = '#f5c6cb';
+                statusDiv.style.color = '#721c24';
+                statusDiv.innerHTML = `❌ ${message}`;
+            } else if (complete) {
+                statusDiv.style.background = '#d4edda';
+                statusDiv.style.borderColor = '#c3e6cb';
+                statusDiv.style.color = '#155724';
+                statusDiv.innerHTML = `✅ ${message}`;
+                setTimeout(() => {
+                    if (statusDiv.parentNode) {
+                        statusDiv.remove();
+                    }
+                }, 3000);
+            } else {
+                statusDiv.innerHTML = `<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div> ${message}`;
+            }
+        }
+
+        // Modified: Handle image, PDF, and SVG uploads
         async function handleFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -1197,6 +1305,7 @@
                 document.getElementById('pdfFileName').textContent = file.name;
                 document.getElementById('pdfPreview').style.display = 'block';
                 document.getElementById('imagePreview').style.display = 'none';
+                document.getElementById('svgPreview').style.display = 'none';
                 document.getElementById('imagePreviewContainer').style.display = 'flex';
                 
                 // Process PDF
@@ -1211,6 +1320,26 @@
                 } catch (error) {
                     console.error('PDF processing failed:', error);
                 }
+            } else if (file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')) {
+                uploadedFileType = 'image/svg+xml';
+                document.getElementById('svgFileName').textContent = file.name;
+                document.getElementById('svgPreview').style.display = 'block';
+                document.getElementById('imagePreview').style.display = 'none';
+                document.getElementById('pdfPreview').style.display = 'none';
+                document.getElementById('imagePreviewContainer').style.display = 'flex';
+                
+                // Process SVG
+                try {
+                    await processSVG(file);
+                    // Store original SVG as base64 for reference
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        uploadedFileBase64 = e.target.result.split(',')[1];
+                    };
+                    reader.readAsDataURL(file);
+                } catch (error) {
+                    console.error('SVG processing failed:', error);
+                }
             } else if (file.type.startsWith('image/')) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
@@ -1218,39 +1347,44 @@
                     document.getElementById('imagePreview').src = e.target.result;
                     document.getElementById('imagePreview').style.display = 'block';
                     document.getElementById('pdfPreview').style.display = 'none';
+                    document.getElementById('svgPreview').style.display = 'none';
                     document.getElementById('imagePreviewContainer').style.display = 'flex';
                 };
                 reader.readAsDataURL(file);
             }
         }
 
-        // Modified: Remove any type of file and clear PDF content
+        // Modified: Remove any type of file and clear all content
         function removeFile() {
             uploadedFileBase64 = null;
             uploadedFileType = null;
             uploadedFileName = null;
             pdfTextContent = null;
             pdfImageContents = [];
+            svgConvertedBase64 = null;
             
             document.getElementById('imageInput').value = '';
             document.getElementById('imagePreview').src = '';
             document.getElementById('imagePreview').style.display = 'none';
             document.getElementById('pdfPreview').style.display = 'none';
+            document.getElementById('svgPreview').style.display = 'none';
             document.getElementById('imagePreviewContainer').style.display = 'none';
             
-            // Remove PDF processing status
-            const statusDiv = document.getElementById('pdfProcessingStatus');
-            if (statusDiv) statusDiv.remove();
+            // Remove processing status divs
+            const pdfStatusDiv = document.getElementById('pdfProcessingStatus');
+            if (pdfStatusDiv) pdfStatusDiv.remove();
+            const svgStatusDiv = document.getElementById('svgProcessingStatus');
+            if (svgStatusDiv) svgStatusDiv.remove();
         }
 
-        // Modified: Updated message sending to include PDF text content
+        // Modified: Updated message sending to include SVG handling
         async function sendMessage() {
             if (isLoading || !currentModel) return;
 
             const messageInput = document.getElementById('messageInput');
             const message = messageInput.value.trim();
             
-            if (!message && !uploadedFileBase64 && !pdfImageContents.length) return;
+            if (!message && !uploadedFileBase64 && !pdfImageContents.length && !svgConvertedBase64) return;
 
             // Prepare file data for display
             let fileData = null;
@@ -1274,14 +1408,24 @@
             // Add user message to memory (use finalMessage with PDF text for LLM)
             let userMsg = { role: "user", content: finalMessage };
             
-            // For PDFs, include the page images as vision input
+            // Handle different file types for vision input
             if (pdfImageContents.length > 0) {
+                // PDF handling
                 userMsg.images = pdfImageContents.map(img => img.data);
                 userMsg.files = [{
                     data: uploadedFileBase64,
                     type: uploadedFileType,
                     name: uploadedFileName,
                     pageImages: pdfImageContents
+                }];
+            } else if (svgConvertedBase64) {
+                // SVG handling - use converted PNG for AI processing
+                userMsg.images = [svgConvertedBase64];
+                userMsg.files = [{
+                    data: uploadedFileBase64,
+                    type: uploadedFileType,
+                    name: uploadedFileName,
+                    convertedImage: svgConvertedBase64
                 }];
             } else if (uploadedFileBase64 && uploadedFileType.startsWith('image/')) {
                 // Regular image handling
