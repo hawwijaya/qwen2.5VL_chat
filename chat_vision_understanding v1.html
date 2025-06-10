@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Chat - by Kuatrinnus Wijaya (Jun 2025)</title>
+    
+    <!-- Favicon and App Icons -->
+    <link rel="icon" type="image/svg+xml" href="chat_icon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="chat_icon.svg">
+    <link rel="icon" type="image/png" sizes="16x16" href="chat_icon.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="chat_icon.svg">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#667eea">
+    <meta name="msapplication-TileColor" content="#667eea">
+    
     <!-- External libraries for enhanced rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -56,6 +66,19 @@
             justify-content: space-between;
             align-items: center;
             gap: 20px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .chat-icon {
+            width: 32px;
+            height: 32px;
+            fill: white;
+            opacity: 0.9;
         }
 
         .title {
@@ -630,7 +653,12 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="title">AI Chat - by Kuatrinnus Wijaya (Jun 2025)</div>
+            <div class="header-left">
+                <svg class="chat-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h4l4 4 4-4h4c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+                </svg>
+                <div class="title">AI Chat - by Kuatrinnus Wijaya (Jun 2025)</div>
+            </div>
             <div class="header-buttons">
                 <button class="new-chat-btn" onclick="startNewChat()" id="newChatBtn" title="Start a new conversation">🆕 New Chat</button>
                 <button class="config-btn" onclick="toggleConfig()">⚙️ Settings</button>
@@ -1854,6 +1882,8 @@
                 const data = await response.json();
                 hideLoading();
                 addMessage(data.message?.content || data.response || 'No response received');
+
+               
 
                 conversationHistory.push({
                     role: "assistant",
