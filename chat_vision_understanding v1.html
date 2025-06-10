@@ -1038,13 +1038,21 @@
                 const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
                 
                 const extractedImages = [];
+                let extractedText = '';
                 
                 // Show processing status
                 showPDFProcessingStatus('Processing PDF pages...');
                 
-                // Process each page - only convert to images
+                // Process each page - extract both text and convert to images
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
                     const page = await pdf.getPage(pageNum);
+                    
+                    // Extract text content
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    if (pageText.trim()) {
+                        extractedText += `\n--- Page ${pageNum} ---\n${pageText.trim()}\n`;
+                    }
                     
                     // Convert page to image
                     const viewport = page.getViewport({ scale: 1.5 });
@@ -1072,13 +1080,13 @@
                     showPDFProcessingStatus(`Processed page ${pageNum}/${pdf.numPages}...`);
                 }
                 
-                pdfTextContent = null; // No text extraction needed
+                pdfTextContent = extractedText.trim() || null;
                 pdfImageContents = extractedImages;
                 
                 showPDFProcessingStatus('PDF processing complete!', true);
                 updatePDFPreview();
                 
-                return { images: pdfImageContents };
+                return { text: pdfTextContent, images: pdfImageContents };
                 
             } catch (error) {
                 console.error('Error processing PDF:', error);
@@ -1125,7 +1133,15 @@
             if (existingContent) existingContent.remove();
             if (existingImages) existingImages.remove();
             
-            // Only show image thumbnails (no text preview)
+            // Show text preview if available
+            if (pdfTextContent) {
+                const textDiv = document.createElement('div');
+                textDiv.className = 'pdf-content-preview';
+                textDiv.textContent = pdfTextContent.substring(0, 300) + (pdfTextContent.length > 300 ? '...' : '');
+                container.appendChild(textDiv);
+            }
+            
+            // Show image thumbnails
             if (pdfImageContents.length > 0) {
                 const imagesDiv = document.createElement('div');
                 imagesDiv.className = 'pdf-images-preview';
@@ -1207,7 +1223,7 @@
             if (statusDiv) statusDiv.remove();
         }
 
-        // Modified: Updated message sending to only use PDF images (no text content)
+        // Modified: Updated message sending to include PDF text content
         async function sendMessage() {
             if (isLoading || !currentModel) return;
 
@@ -1226,13 +1242,16 @@
                 };
             }
 
-            // For PDFs, just use the message as-is (no text content appending)
+            // For PDFs, append extracted text content to the message for LLM processing
             let finalMessage = message;
+            if (pdfTextContent) {
+                finalMessage = `${message}\n\n[PDF Content from "${uploadedFileName}"]\n${pdfTextContent}`;
+            }
 
-            // Add user message, with file if present
+            // Add user message, with file if present (display original message, not with PDF text)
             addMessage(message, true, fileData);
 
-            // Add user message to memory
+            // Add user message to memory (use finalMessage with PDF text for LLM)
             let userMsg = { role: "user", content: finalMessage };
             
             // For PDFs, include the page images as vision input
