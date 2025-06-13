@@ -699,7 +699,8 @@
 
         <div class="chat-container">
             <div class="messages" id="messages">
-                <div class="message assistant">
+                <!-- Static welcome message that won't be sent to backend -->
+                <div class="message assistant" id="staticWelcomeMessage">
                     <div class="message-content">
                         👋 Hello! I'm your AI assistant run locally in your PC. Please configure your settings above and select a model to start chatting. Then you can add image, pdf, or other file and ask about the uploaded file
                     </div>
@@ -764,27 +765,20 @@
         let spreadsheetData = null; // Store CSV/Excel data
         let spreadsheetStats = null; // Store statistics about spreadsheet
 
-        // New: Conversation memory/history
-        let conversationHistory = [
-            {
-                role: "assistant",
-                content: "👋 Hello! I'm your AI assistant run locally in your PC. Please configure your settings above and select a model to start chatting. Then you can add image, pdf, or other file and ask about the uploaded file."
-            }
-        ];
+        // Modified: Initialize empty conversation history (no welcome message)
+        let conversationHistory = [];
         let currentSystemPrompt = null; // Track current system prompt
 
-        // New: Start new chat (clear history and UI)
+        // Modified: Start new chat (clear history and dynamic UI messages only)
         function startNewChat() {
-            conversationHistory = [
-                {
-                    role: "assistant",
-                    content: "👋 Hello! I'm your AI assistant run locally in your PC. Please configure your settings above and select a model to start chatting. Then you can add image, pdf, or other file and ask about the uploaded file."
-                }
-            ];
+            conversationHistory = []; // Empty history, no welcome message
             currentSystemPrompt = null; // Reset system prompt tracking
             const messagesContainer = document.getElementById('messages');
-            messagesContainer.innerHTML = '';
-            addMessage(conversationHistory[0].content, false);
+            
+            // Remove all messages except the static welcome message
+            const messages = messagesContainer.querySelectorAll('.message:not(#staticWelcomeMessage)');
+            messages.forEach(message => message.remove());
+            
             removeFile(); // Updated function name
             document.getElementById('messageInput').value = '';
         }
@@ -1720,7 +1714,7 @@
             if (csvStatusDiv) csvStatusDiv.remove();
         }
 
-        // Modified: Updated message sending to include system prompt
+        // Modified: Updated message sending to exclude static welcome from backend
         async function sendMessage() {
             if (isLoading || !currentModel) return;
 
@@ -1737,8 +1731,8 @@
             if (systemPromptChanged && systemPrompt) {
                 currentSystemPrompt = systemPrompt;
                 // Add system message to history if it's the first time or changed
-                if (conversationHistory.length === 1 && conversationHistory[0].role === "assistant") {
-                    // Insert system prompt before the initial assistant message
+                if (conversationHistory.length === 0) {
+                    // Insert system prompt at the beginning of conversation
                     conversationHistory.unshift({
                         role: "system",
                         content: systemPrompt
@@ -1896,6 +1890,7 @@
                 
                 let errorMessage = error.message;
                 if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+
                     errorMessage = 'CORS Error: Cannot connect to Ollama server. Restart Ollama with CORS enabled (see Settings panel).';
                 }
                 
@@ -2004,6 +1999,11 @@
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 sendMessage();
+            }
+        }
+    </script>
+</body>
+</html>
             }
         }
     </script>
