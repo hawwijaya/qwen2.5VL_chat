@@ -2286,6 +2286,19 @@
             document.getElementById('imageEnhancementPanel').classList.remove('active');
             document.getElementById('imagePreviewContainer').style.display = 'none';
             
+            // Explicitly remove detailed previews from the filePreview container
+            const filePreviewDiv = document.getElementById('filePreview');
+            if (filePreviewDiv) {
+                const pdfContentPreview = filePreviewDiv.querySelector('.pdf-content-preview');
+                if (pdfContentPreview) pdfContentPreview.remove();
+
+                const pdfImagesPreview = filePreviewDiv.querySelector('.pdf-images-preview');
+                if (pdfImagesPreview) pdfImagesPreview.remove();
+
+                const spreadsheetPreview = filePreviewDiv.querySelector('.spreadsheet-preview');
+                if (spreadsheetPreview) spreadsheetPreview.remove();
+            }
+            
             // Remove processing status divs
             const statusDivs = ['pdfProcessingStatus', 'svgProcessingStatus', 'csvProcessingStatus', 'opencvProcessingStatus'];
             statusDivs.forEach(id => {
